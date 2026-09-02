@@ -38,6 +38,10 @@
             </p>
           </div>
         </div>
+        <div class="mt-5 flex flex-col items-center gap-3">
+          <p class="text-xs text-muted-foreground text-center leading-relaxed">🔃 Seamlessly continue sessions started on your computer from your phone, or vice versa.</p>
+          <StoreBadges />
+        </div>
       </section>
 
       <section class="mt-auto">
@@ -63,6 +67,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import StoreBadges from '@/components/StoreBadges.vue'
 import { useConnectionStore } from '@/stores/connectionStore'
 import {
   disableNativeNotificationsFromSettings,

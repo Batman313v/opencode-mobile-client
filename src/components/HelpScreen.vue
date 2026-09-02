@@ -11,6 +11,10 @@
       <section>
         <h2 class="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{{ t('help.about') }}</h2>
         <p class="text-sm leading-relaxed">{{ t('help.aboutText') }}</p>
+        <div class="mt-4 flex flex-col items-center gap-3">
+          <p class="text-sm text-center leading-relaxed">🔃 Seamlessly continue sessions started on your computer from your phone, or vice versa.</p>
+          <StoreBadges />
+        </div>
       </section>
 
       <section>
@@ -83,6 +87,7 @@ import { useRouter } from 'vue-router'
 import { ArrowLeft } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import StoreBadges from '@/components/StoreBadges.vue'
 import { useI18n } from '@/i18n'
 
 const router = useRouter()

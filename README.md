@@ -4,9 +4,9 @@
 
 Chat with your agents from your phone while they and the server run on your computer, with full access to your code and tools 🖥️
 
-🔃 Seamlessly continue sessions started on your computer from your phone, or vice versa. Available on [Android](https://play.google.com/store/apps/details?id=com.logicedge.opencodemobile) and [iOS](https://apps.apple.com/app/id6787161501)
+🔃 Seamlessly continue sessions started on your computer from your phone, or vice versa. Available on [Android](https://play.google.com/store/apps/details?id=com.logicedge.opencodemobile), [iOS](https://apps.apple.com/app/id6787161501) and [VS Code](https://marketplace.visualstudio.com/items?itemName=bmpenuelas.opencode-web-sidebar)
 
-[![install Android](docs/install_google_play_color_light.png)](https://play.google.com/store/apps/details?id=com.logicedge.opencodemobile) [![install iOS](docs/install_app_store_color_light.png)](https://apps.apple.com/app/id6787161501)
+[![install Android](docs/install_google_play_color_light.png)](https://play.google.com/store/apps/details?id=com.logicedge.opencodemobile) [![install iOS](docs/install_app_store_color_light.png)](https://apps.apple.com/app/id6787161501) [![install VS Code](docs/install_vscode_color_light.png)](https://marketplace.visualstudio.com/items?itemName=bmpenuelas.opencode-web-sidebar)
 
 ---
 
@@ -21,6 +21,12 @@ Chat with your agents from your phone while they and the server run on your comp
 - ❤️ Automatic health checks with exponential reconnect
 - 🔒 Secure storage for passwords (Keychain/EncryptedSharedPreferences)
 - 🌓 Dark theme with light theme support (`prefers-color-scheme`)
+
+<p align="center">
+  <img src="docs/screenshots/android/play-store-01-landing.png" width="30%" alt="Landing" />
+  <img src="docs/screenshots/android/play-store-04-connected.png" width="30%" alt="Connected session" />
+  <img src="docs/screenshots/android/play-store-05-pull-menu.png" width="30%" alt="Pull menu" />
+</p>
 
 ---
 

@@ -158,6 +158,18 @@ async function copyDocsAssets() {
     await copyFile(src, dest)
     console.log(`docs/${file}`)
   }
+  const installBadges = [
+    'img/install_google_play_color_light.png',
+    'img/install_app_store_color_light.png',
+    'img/install_vscode_color_light.png',
+  ]
+  for (const file of installBadges) {
+    const src = resolve(PUBLIC_DIR, file)
+    if (!existsSync(src)) continue
+    const dest = resolve(DOCS_DIR, file.split('/').pop())
+    await copyFile(src, dest)
+    console.log(`docs/${file.split('/').pop()}`)
+  }
 }
 
 async function generateAdaptiveIconForegrounds(svgPath) {
