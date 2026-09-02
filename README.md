@@ -4,7 +4,9 @@
 
 Chat with your agents from your phone while they and the server run on your computer, with full access to your code and tools 🖥️
 
-🔃 Seamlessly continue sessions started on your computer from your phone, or vice versa
+🔃 Seamlessly continue sessions started on your computer from your phone, or vice versa. Available on [Android](https://play.google.com/store/apps/details?id=com.logicedge.opencodemobile) and [iOS](https://apps.apple.com/app/id6787161501)
+
+[![install Android](docs/install_google_play_color_light.png)](https://play.google.com/store/apps/details?id=com.logicedge.opencodemobile) [![install iOS](docs/install_app_store_color_light.png)](https://apps.apple.com/app/id6787161501)
 
 ---
 
