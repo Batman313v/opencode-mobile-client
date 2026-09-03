@@ -272,20 +272,36 @@ function buildMobileComposerFixScript(): string {
     var composerSelector='[data-component="prompt-input-v2"]';
     var submitSelector='[data-action="prompt-submit"]';
     var compactWidth=560;
-    var observed=new WeakSet();
+    var observed=new WeakMap();
     var refreshQueued=false;
 
     function installStyle(){
       if(document.getElementById('oc-mobile-composer-fix-style'))return;
       var style=document.createElement('style');
       style.id='oc-mobile-composer-fix-style';
-      style.textContent='[data-component="prompt-input-v2"][data-oc-mobile-composer-compact] [data-oc-mobile-composer-row]{min-width:0!important;min-height:48px!important;height:auto!important;padding:4px 6px 4px 8px!important}[data-component="prompt-input-v2"][data-oc-mobile-composer-compact] [data-oc-mobile-composer-controls]{min-width:0!important;flex:1 1 auto!important;overflow-x:auto!important;overflow-y:hidden!important;overscroll-behavior-x:contain;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x}[data-component="prompt-input-v2"][data-oc-mobile-composer-compact] [data-oc-mobile-composer-controls]::-webkit-scrollbar{display:none}[data-component="prompt-input-v2"][data-oc-mobile-composer-compact] [data-oc-mobile-composer-controls]>*{flex:0 0 auto!important;min-width:max-content}[data-component="prompt-input-v2"][data-oc-mobile-composer-compact] [data-action="prompt-submit"][data-oc-mobile-composer-send]{position:relative!important;z-index:2!important;box-sizing:border-box!important;flex:0 0 40px!important;width:40px!important;min-width:40px!important;height:40px!important;margin-left:4px!important;touch-action:manipulation}';
+      style.textContent='[data-component="prompt-input-v2"][data-oc-mobile-composer-compact] [data-oc-mobile-composer-row]{display:flex!important;min-width:0!important;min-height:48px!important;height:auto!important;padding:4px 6px 4px 8px!important}[data-component="prompt-input-v2"][data-oc-mobile-composer-compact] [data-oc-mobile-composer-controls-host]{position:relative!important;display:flex!important;min-width:0!important;flex:1 1 auto!important;align-self:stretch!important;align-items:center!important}[data-component="prompt-input-v2"][data-oc-mobile-composer-compact] [data-oc-mobile-composer-controls]{display:flex!important;width:100%!important;min-width:0!important;overflow-x:auto!important;overflow-y:hidden!important;overscroll-behavior-x:contain;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x}[data-component="prompt-input-v2"][data-oc-mobile-composer-compact] [data-oc-mobile-composer-controls]::-webkit-scrollbar{display:none}[data-component="prompt-input-v2"][data-oc-mobile-composer-compact] [data-oc-mobile-composer-controls]>*{flex:0 0 auto!important;min-width:max-content!important}[data-component="prompt-input-v2"][data-oc-mobile-composer-compact] [data-oc-mobile-composer-send-host]{display:flex!important;flex:0 0 40px!important;min-width:40px!important;margin-left:4px!important;align-items:center!important;justify-content:center!important}[data-component="prompt-input-v2"][data-oc-mobile-composer-compact] [data-action="prompt-submit"][data-oc-mobile-composer-send]{position:static!important;z-index:auto!important;box-sizing:border-box!important;flex:0 0 40px!important;width:40px!important;min-width:40px!important;height:40px!important;margin-left:0!important;touch-action:manipulation}[data-component="prompt-input-v2"][data-oc-mobile-composer-compact] [data-oc-mobile-composer-scroll]{position:absolute!important;top:0!important;bottom:0!important;z-index:1!important;display:flex!important;width:40px!important;padding:0!important;align-items:center!important;border:0!important;background:transparent!important;color:var(--v2-icon-icon-muted,currentColor)!important;font:26px/1 -apple-system,BlinkMacSystemFont,sans-serif!important;touch-action:manipulation!important;cursor:pointer!important}[data-component="prompt-input-v2"][data-oc-mobile-composer-compact] [data-oc-mobile-composer-scroll] span{display:block!important;transform:translateY(-1px)!important}[data-component="prompt-input-v2"][data-oc-mobile-composer-compact] [data-oc-mobile-composer-scroll="left"]{left:0!important;justify-content:flex-start!important;background-image:linear-gradient(to right,var(--v2-background-bg-base,#1c1c1e),transparent)!important}[data-component="prompt-input-v2"][data-oc-mobile-composer-compact] [data-oc-mobile-composer-scroll="right"]{right:0!important;justify-content:flex-end!important;padding-right:8px!important;background-image:linear-gradient(to left,var(--v2-background-bg-base,#1c1c1e),transparent)!important}[data-component="prompt-input-v2"][data-oc-mobile-composer-compact] [data-oc-mobile-composer-scroll][hidden]{display:none!important}';
       document.head.appendChild(style);
     }
 
     function findRow(composer,submit){
       var row=submit.parentElement;
       while(row&&row!==composer){
+        // The observer also sees the nodes we add. Prefer the original
+        // scroll container on later passes so we never wrap it again.
+        var patchedControls=row.querySelector('[data-oc-mobile-composer-controls]');
+        if(patchedControls&&!patchedControls.contains(submit)){
+          var patchedHost=patchedControls.parentElement;
+          if(patchedHost&&patchedHost!==row&&!patchedHost.contains(submit)){
+            return {row:row,controls:patchedControls,host:patchedHost};
+          }
+        }
+        var promptControls=row.querySelector('[data-slot="prompt-controls"]');
+        if(promptControls&&!promptControls.contains(submit)){
+          var promptControlsHost=promptControls.parentElement;
+          if(promptControlsHost&&promptControlsHost!==row&&!promptControlsHost.contains(submit)){
+            return {row:row,controls:promptControls,host:promptControlsHost};
+          }
+        }
         var children=Array.prototype.slice.call(row.children);
         var controls=null;
         for(var i=0;i<children.length;i++){
@@ -295,7 +311,7 @@ function buildMobileComposerFixScript(): string {
             break;
           }
         }
-        if(controls)return {row:row,controls:controls};
+        if(controls)return {row:row,controls:controls,host:controls};
         row=row.parentElement;
       }
       return null;
@@ -307,22 +323,95 @@ function buildMobileComposerFixScript(): string {
       else composer.removeAttribute('data-oc-mobile-composer-compact');
     }
 
+    function ensureControlsHost(layout){
+      if(layout.host!==layout.controls)return layout.host;
+      var host=document.createElement('div');
+      layout.controls.parentNode.insertBefore(host,layout.controls);
+      host.appendChild(layout.controls);
+      return host;
+    }
+
+    function scrollControls(controls,direction){
+      var amount=Math.max(controls.clientWidth-32,1);
+      if(typeof controls.scrollBy==='function')controls.scrollBy({left:direction*amount,behavior:'smooth'});
+      else controls.scrollLeft+=direction*amount;
+    }
+
+    function ensureScrollButton(host,controls,direction){
+      var side=direction<0?'left':'right';
+      var button=host.querySelector('[data-oc-mobile-composer-scroll="'+side+'"]');
+      if(button)return button;
+      button=document.createElement('button');
+      button.type='button';
+      button.setAttribute('data-oc-mobile-composer-scroll',side);
+      button.setAttribute('aria-label','Scroll prompt controls '+side);
+      var glyph=document.createElement('span');
+      glyph.setAttribute('aria-hidden','true');
+      glyph.textContent=direction<0?'\u2039':'\u203a';
+      button.appendChild(glyph);
+      button.hidden=true;
+      button.addEventListener('click',function(event){
+        event.preventDefault();
+        event.stopPropagation();
+        scrollControls(controls,direction);
+      });
+      host.appendChild(button);
+      return button;
+    }
+
+    function updateScrollButtons(composer,controls,leftButton,rightButton){
+      if(!composer.hasAttribute('data-oc-mobile-composer-compact')){
+        leftButton.hidden=true;
+        rightButton.hidden=true;
+        return;
+      }
+      var container=controls.getBoundingClientRect();
+      var hasLeft=false;
+      var hasRight=false;
+      var children=controls.children;
+      for(var i=0;i<children.length;i++){
+        var bounds=children[i].getBoundingClientRect();
+        if(bounds.left<container.left-1)hasLeft=true;
+        if(bounds.right>container.right+1)hasRight=true;
+      }
+      if(!hasLeft&&!hasRight&&controls.scrollWidth>controls.clientWidth+1){
+        hasLeft=controls.scrollLeft>1;
+        hasRight=controls.scrollLeft<controls.scrollWidth-controls.clientWidth-1;
+      }
+      leftButton.hidden=!hasLeft;
+      rightButton.hidden=!hasRight;
+    }
+
     function patchComposer(composer){
       var submit=composer.querySelector(submitSelector);
       if(!submit)return;
       var layout=findRow(composer,submit);
       if(!layout)return;
+      layout.host=ensureControlsHost(layout);
       layout.row.setAttribute('data-oc-mobile-composer-row','');
       layout.controls.setAttribute('data-oc-mobile-composer-controls','');
+      layout.host.setAttribute('data-oc-mobile-composer-controls-host','');
+      var submitHost=submit.parentElement;
+      if(submitHost&&submitHost!==layout.row)submitHost.setAttribute('data-oc-mobile-composer-send-host','');
       submit.setAttribute('data-oc-mobile-composer-send','');
       setCompact(composer);
-      if(!observed.has(composer)){
-        observed.add(composer);
+      var leftButton=ensureScrollButton(layout.host,layout.controls,-1);
+      var rightButton=ensureScrollButton(layout.host,layout.controls,1);
+      var update=function(){updateScrollButtons(composer,layout.controls,leftButton,rightButton)};
+      update();
+      var previous=observed.get(composer);
+      if(!previous||previous.controls!==layout.controls){
+        observed.set(composer,{controls:layout.controls});
         if(window.ResizeObserver){
-          var resizeObserver=new ResizeObserver(function(){setCompact(composer)});
+          var resizeObserver=new ResizeObserver(function(){setCompact(composer);update()});
           resizeObserver.observe(composer);
+          resizeObserver.observe(layout.controls);
         }
+        layout.controls.addEventListener('scroll',update,{passive:true});
+        var controlsObserver=new MutationObserver(function(){requestAnimationFrame(update)});
+        controlsObserver.observe(layout.controls,{childList:true,subtree:true,characterData:true});
       }
+      requestAnimationFrame(update);
     }
 
     function refresh(){
@@ -342,6 +431,8 @@ function buildMobileComposerFixScript(): string {
       refresh();
       var observer=new MutationObserver(scheduleRefresh);
       observer.observe(document.body,{childList:true,subtree:true});
+      setTimeout(refresh,250);
+      setTimeout(refresh,1000);
     }
     mount();
   })();`
