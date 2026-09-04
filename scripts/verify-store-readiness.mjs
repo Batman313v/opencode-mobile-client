@@ -43,6 +43,12 @@ check(
   "ATS and the local-network privacy prompt must preserve LAN/private WebView server support"
 );
 check(
+  "iOS export compliance key is set",
+  infoPlist.includes("ITSAppUsesNonExemptEncryption") &&
+    infoPlist.includes("<false/>"),
+  "Info.plist must contain ITSAppUsesNonExemptEncryption=false so App Store Connect skips manual encryption attestation"
+);
+check(
   "iOS arm64 device capability is set",
   infoPlist.includes("<string>arm64</string>") && !infoPlist.includes("<string>armv7</string>"),
   "UIRequiredDeviceCapabilities should require arm64"

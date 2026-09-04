@@ -138,4 +138,4 @@ npm run screenshots:android:guided      # Prompts before each capture
 
 1. Files are already named per the convention above and saved to `docs/screenshots/{platform}/`
 2. Upload to App Store Connect / Google Play Console
-3. Reference these files in `store/app-store.md` and `store/play-store.md`
+3. Reference these files in `store/app-store/app-store.md` and `store/play-store/play-store.md`

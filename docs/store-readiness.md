@@ -11,6 +11,7 @@ This project intentionally supports user-provided OpenCode servers:
 - iOS privacy manifest: `ios/App/App/PrivacyInfo.xcprivacy`.
 - Cross-platform privacy policy: `docs/privacy-policy.html`.
 - iOS ATS allowances for user-provided local/private HTTP and WebView loading.
+- iOS export compliance: `ITSAppUsesNonExemptEncryption=false` in `ios/App/App/Info.plist` (no manual App Store Connect attestation needed).
 - iOS `UIRequiredDeviceCapabilities` set to `arm64`.
 - iOS Release xcconfig: `ios/release.xcconfig`.
 - Android release signing/R8 scaffolding in `android/app/build.gradle`.
@@ -43,4 +44,4 @@ This project intentionally supports user-provided OpenCode servers:
 - Run `npm run lint`, `npm test`, and `npm run build`.
 - Android: configure `android/keystore.properties` or the four `ANDROID_*` signing environment variables before `npm run android:play:bundle`.
 - iOS: verify Xcode Release archive uses the expected Apple Developer team and distribution certificate.
-- Store forms: complete App Store privacy labels, Play Data Safety, content rating, encryption/export compliance, support URL, and privacy URL.
+- Store forms: complete App Store privacy labels, Play Data Safety, content rating, support URL, and privacy URL (iOS encryption/export compliance is already declared in Info.plist).
