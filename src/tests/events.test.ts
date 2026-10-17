@@ -245,4 +245,63 @@ describe('openSseStream', () => {
 
     handle.close()
   })
+
+  it('never uses the open frame id as the since= cursor', async () => {
+    vi.setSystemTime(new Date(1792217654000))
+    const harness = makeFetchStub([
+      [
+        'event: open\ndata: {"id":"openid1","time":1792217654,"event":"open","topic":"opencode-mobile"}\n\n' +
+          'event: message\ndata: {"id":"msgA","time":1792217654,"event":"message","topic":"opencode-mobile","message":"one"}\n\n',
+      ],
+      [],
+    ])
+    const handle = openSseStream({ url: 'https://ntfy.example/opencode-mobile/sse', onFrame: () => {} })
+
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(5000)
+
+    expect(harness.calls).toHaveLength(2)
+    // Resuming with the open frame id would make ntfy replay the entire topic history.
+    expect(harness.calls[1].url).toBe('https://ntfy.example/opencode-mobile/sse?since=msgA')
+
+    handle.close()
+  })
+
+  it('reconnects without since= when only the open frame was ever received', async () => {
+    vi.setSystemTime(new Date(1792217654000))
+    const harness = makeFetchStub([
+      ['event: open\ndata: {"id":"openid1","time":1792217654,"event":"open","topic":"opencode-mobile"}\n\n'],
+      [],
+    ])
+    const handle = openSseStream({ url: 'https://ntfy.example/opencode-mobile/sse', onFrame: () => {} })
+
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(5000)
+
+    expect(harness.calls).toHaveLength(2)
+    expect(harness.calls[1].url).toBe('https://ntfy.example/opencode-mobile/sse')
+
+    handle.close()
+  })
+
+  it('drops stale replayed frames but still advances the resume cursor past them', async () => {
+    vi.setSystemTime(new Date(1792217654000))
+    const harness = makeFetchStub([
+      ['event: message\ndata: {"id":"stale1","time":1792217254,"event":"message","topic":"opencode-mobile","message":"old"}\n\n'],
+      [],
+    ])
+    const frames: SseFrame[] = []
+    const handle = openSseStream({ url: 'https://ntfy.example/opencode-mobile/sse', onFrame: frame => frames.push(frame) })
+
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(5000)
+
+    // 400s old — beyond the staleness threshold, so it is not delivered…
+    expect(frames).toEqual([])
+    // …but the cursor advanced past it, so a later reconnect does not re-replay it.
+    expect(harness.calls).toHaveLength(2)
+    expect(harness.calls[1].url).toBe('https://ntfy.example/opencode-mobile/sse?since=stale1')
+
+    handle.close()
+  })
 })

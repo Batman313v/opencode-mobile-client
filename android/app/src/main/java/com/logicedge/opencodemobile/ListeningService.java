@@ -56,6 +56,15 @@ public class ListeningService extends Service {
     private static final String EVENTS_CHANNEL_ID = "opencode-server-events";
     private static final int LISTENING_NOTIFICATION_ID = 1;
     private static final long RECONNECT_DELAY_MS = 5000L;
+    // ntfy v2 sends no SSE heartbeats, so a healthy idle stream produces no reads: a read timeout
+    // doubles as a max stream lifetime. Without it a half-open TCP path (Wi-Fi sleep, NAT expiry)
+    // blocks readLine() forever and the service goes blind for hours; capping it forces a cheap
+    // reconnect that resumes via since= (stale replays are dropped by the guard in handleFrame).
+    private static final int STREAM_READ_TIMEOUT_MS = 600_000;
+    // Frames older than this are dropped on delivery. After a long outage a since= resume replays
+    // the topic backlog — without the guard a reconnect would flood the shade with hours-old
+    // notifications. The resume cursor still advances past dropped frames.
+    private static final long STALE_AFTER_SECONDS = 300;
     // Separate range from the JS plugin's ids to avoid clobbering in-flight notifications.
     private static final AtomicInteger EVENT_NOTIFICATION_IDS = new AtomicInteger(1_000_000);
 
@@ -171,8 +180,9 @@ public class ListeningService extends Service {
                     current.setRequestProperty("Authorization", "Bearer " + auth);
                 }
                 current.setConnectTimeout(15_000);
-                // No read timeout: the stream is long-lived and idle between messages. A dead
-                // connection surfaces as EOF/IOException and triggers the reconnect below.
+                // Read timeout as max stream lifetime — see STREAM_READ_TIMEOUT_MS. A dead
+                // connection surfaces as a timeout/IOException and triggers the reconnect below.
+                current.setReadTimeout(STREAM_READ_TIMEOUT_MS);
 
                 int status = current.getResponseCode();
                 if (status != 200) throw new IOException("ntfy stream status " + status);
@@ -219,11 +229,17 @@ public class ListeningService extends Service {
         if (frameData.isEmpty()) return;
         try {
             JSONObject message = new JSONObject(frameData);
-            // Every envelope carries the ntfy message id — remember it so a reconnect can resume via since=.
+            // ntfy delivers published messages as event: message — ignore other frame kinds. The
+            // `open` frame also carries an id, but it is not a topic message id: passing it as
+            // since= makes ntfy replay the entire topic history, so only message frames may set
+            // the resume cursor.
+            if (!"message".equals(message.optString("event", ""))) return;
             String id = message.optString("id", "");
             if (!id.isEmpty()) lastEventId.set(id);
-            // ntfy delivers published messages as event: message — ignore other frame kinds.
-            if (!"message".equals(message.optString("event", ""))) return;
+            // Staleness guard: drop replayed backlog older than the threshold (the cursor has
+            // already advanced past it, so it is not re-replayed on a later reconnect).
+            long time = message.optLong("time", 0);
+            if (time > 0 && System.currentTimeMillis() / 1000 - time > STALE_AFTER_SECONDS) return;
             String text = message.optString("message", "");
 
             NtfyPayload payload = parseBridgePayload(text);

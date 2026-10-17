@@ -130,6 +130,12 @@ export function mapNtfyFrame(frame: SseFrame): NtfyNotification | null {
 const RECONNECT_DELAY_MS = 5000
 const MAX_BUFFER_LENGTH = 4_194_304
 const BUFFER_KEEP_TAIL = 65_536
+/**
+ * Frames older than this are dropped on delivery. After a long outage a since= resume replays the
+ * topic backlog — without the guard a reconnect would flood the user with hours-old notifications.
+ * The resume cursor still advances past dropped frames, so they are not re-replayed later.
+ */
+const STALE_AFTER_SECONDS = 300
 
 export type SseStreamHandle = { close(): void }
 
@@ -138,9 +144,12 @@ export type SseStreamHandle = { close(): void }
  * automatically while open. Used by the JS monitor (non-Android platforms) to subscribe to the
  * ntfy topic's /sse stream; every parsed frame is handed to onFrame for the caller to map. After a
  * drop, the last seen message id — which ntfy v2 carries inside each JSON envelope rather than in
- * SSE id lines — is appended as a since= query parameter so missed messages are replayed. ntfy
- * answers browser subscriptions with permissive CORS headers, which covers the Capacitor web views
- * and dev browser.
+ * SSE id lines — is appended as a since= query parameter so missed messages are replayed. Only
+ * `event: message` envelopes may set that cursor: ntfy's `open` frame also carries an id, but it is
+ * not a topic message id, and ntfy treats an unknown since= value as "replay the entire history".
+ * Frames older than STALE_AFTER_SECONDS are dropped (the backlog a long outage accumulates) while
+ * the cursor still advances past them. ntfy answers browser subscriptions with permissive CORS
+ * headers, which covers the Capacitor web views and dev browser.
  */
 export function openSseStream(options: {
   url: string
@@ -157,12 +166,20 @@ export function openSseStream(options: {
     // resume with a since=<id> query parameter.
     const forwardFrame = (frame: SseFrame): void => {
       try {
-        const envelope = JSON.parse(frame.data) as { id?: unknown }
-        if (typeof envelope.id === 'string' && envelope.id !== '') lastEventId = envelope.id
+        const envelope = JSON.parse(frame.data) as { id?: unknown; event?: unknown; time?: unknown }
+        // Only real topic messages carry a usable since= cursor — the `open` frame's id is not a
+        // message id, and since=<unknown id> makes ntfy replay the whole topic history.
+        if (envelope.event === 'message' && typeof envelope.id === 'string' && envelope.id !== '') {
+          lastEventId = envelope.id
+        }
+        // Staleness guard: drop replayed backlog older than the threshold (the cursor has already
+        // advanced past it, so it is not re-replayed on a later reconnect).
+        if (typeof envelope.time === 'number' && Date.now() / 1000 - envelope.time > STALE_AFTER_SECONDS) return
+        options.onFrame(frame)
       } catch {
-        // Non-JSON frame — nothing to track.
+        // Non-JSON frame — nothing to track; forward as-is.
+        options.onFrame(frame)
       }
-      options.onFrame(frame)
     }
 
     while (!closed) {
