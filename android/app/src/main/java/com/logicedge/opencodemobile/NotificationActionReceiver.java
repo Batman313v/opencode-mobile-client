@@ -162,7 +162,7 @@ public class NotificationActionReceiver extends BroadcastReceiver {
         NotificationCompat.Builder builder = new NotificationCompat.Builder(appContext, EVENTS_CHANNEL_ID)
                 .setContentTitle(title)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
-                .setSmallIcon(android.R.drawable.ic_popup_reminder)
+                .setSmallIcon(R.drawable.ic_notification_agent)
                 .setCategory(NotificationCompat.CATEGORY_EVENT)
                 .setAutoCancel(true);
 

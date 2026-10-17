@@ -343,3 +343,7 @@ npm run build
 ## License
 
 MIT
+
+### Third-party assets
+
+- **Notification icon** — the robot head used in push notifications is based on the [Agent Robot Avatar](https://github.com/CX-ArtLab/agent-robot-avatar) by [CX ArtLab](https://github.com/CX-ArtLab) (MIT License).

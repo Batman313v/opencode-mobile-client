@@ -428,7 +428,7 @@ public class ListeningService extends Service {
                 .setContentTitle(title)
                 .setContentText(body)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
-                .setSmallIcon(android.R.drawable.ic_popup_reminder)
+                .setSmallIcon(R.drawable.ic_notification_agent)
                 .setCategory(NotificationCompat.CATEGORY_EVENT)
                 .setAutoCancel(true)
                 .setContentIntent(contentIntent);
@@ -480,7 +480,7 @@ public class ListeningService extends Service {
         return new NotificationCompat.Builder(this, LISTENING_CHANNEL_ID)
                 .setContentTitle("Opencode Mobile Client")
                 .setContentText("Listening for OpenCode server events")
-                .setSmallIcon(android.R.drawable.ic_popup_reminder)
+                .setSmallIcon(R.drawable.ic_notification_agent)
                 .setOngoing(true)
                 .setCategory(NotificationCompat.CATEGORY_SERVICE)
                 .setVisibility(NotificationCompat.VISIBILITY_SECRET)
