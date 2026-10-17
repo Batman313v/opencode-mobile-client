@@ -17,7 +17,6 @@ export const useConnectionStore = defineStore('connection', () => {
   const healthCheckTimeout = ref(DEFAULT_TIMEOUT)
   const healthPollInterval = ref(DEFAULT_POLL_INTERVAL)
   const exponentialReconnectEnabled = ref(true)
-  const iframeLoadingFailed = ref(false)
   const lastWebviewServerId = ref<string | null>(null)
 
   let healthPollTimer: ReturnType<typeof setInterval> | null = null
@@ -34,7 +33,7 @@ export const useConnectionStore = defineStore('connection', () => {
   const isChecking = computed(() => state.value === 'checking')
   const isReconnecting = computed(() => state.value === 'reconnecting')
   const isDisconnected = computed(() =>
-    ['unreachable', 'wrong_credentials', 'frame_blocked', 'disconnected'].includes(state.value)
+    ['unreachable', 'wrong_credentials', 'disconnected'].includes(state.value)
   )
 
   function setHealthCheckTimeout(ms: number): void {
@@ -63,7 +62,6 @@ export const useConnectionStore = defineStore('connection', () => {
     activeServerId.value = serverId
     state.value = 'checking'
     lastError.value = null
-    iframeLoadingFailed.value = false
 
     const password = await serverStore.getPassword(serverId)
 
@@ -197,12 +195,6 @@ export const useConnectionStore = defineStore('connection', () => {
     state.value = 'disconnected'
     lastError.value = null
     activeServerId.value = null
-    iframeLoadingFailed.value = false
-  }
-
-  function setFrameBlocked(): void {
-    state.value = 'frame_blocked'
-    iframeLoadingFailed.value = true
   }
 
   function cleanup(): void {
@@ -224,7 +216,6 @@ export const useConnectionStore = defineStore('connection', () => {
     healthCheckTimeout,
     healthPollInterval,
     exponentialReconnectEnabled,
-    iframeLoadingFailed,
     lastWebviewServerId,
     isConnected,
     isChecking,
@@ -236,7 +227,6 @@ export const useConnectionStore = defineStore('connection', () => {
     connect,
     disconnect,
     cancelReconnect,
-    setFrameBlocked,
     cleanup,
   }
 })

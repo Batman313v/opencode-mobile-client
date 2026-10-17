@@ -4,7 +4,7 @@
 
 | # | Screen | Route | Device |
 |---|--------|-------|--------|
-| 1 | Landing — default server ready to connect | `/` | Phone |
+| 1 | Home — server list with status dots | `/` | Phone |
 | 2 | Server list with profiles | `/servers` | Phone |
 | 3 | Add server form (URL + auth fields filled) | `/servers/new` | Phone |
 | 4 | Active connection — OpenCode Web UI loaded | `/connect/:id` | Phone |
@@ -35,7 +35,7 @@
 ## Setup Prerequisites
 
 1. Have a running OpenCode Web server reachable from your device
-2. Add at least 2 server profiles in the app (one default, one secondary)
+2. Add at least 2 server profiles in the app
 3. Set the device to light mode for cleaner screenshots
 4. Use iOS Simulator or Android Emulator for pixel-perfect captures
 5. Set simulator/emulator to 100% scale (not Retina scaling)
@@ -43,7 +43,7 @@
 ## Capture Checklist
 
 ### Phone screenshots
-- [ ] Landing (default server, ready state, green dot)
+- [ ] Home — server list (green status dots visible)
 - [ ] Server list (2+ profiles, mixed statuses)
 - [ ] Add server form (URL filled, auth toggled on)
 - [ ] WebView connected (OpenCode interface visible)

@@ -1,21 +1,16 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
-import LandingScreen from '@/components/LandingScreen.vue'
 import ServerList from '@/components/ServerList.vue'
 import ServerProfileForm from '@/components/ServerProfileForm.vue'
 import SettingsScreen from '@/components/SettingsScreen.vue'
 import HelpScreen from '@/components/HelpScreen.vue'
 import ConnectionShell from '@/components/ConnectionShell.vue'
+import ServerModelsScreen from '@/components/ServerModelsScreen.vue'
 
 const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     {
       path: '/',
-      name: 'landing',
-      component: LandingScreen,
-    },
-    {
-      path: '/servers',
       name: 'servers',
       component: ServerList,
     },
@@ -43,6 +38,11 @@ const router = createRouter({
       path: '/connect/:id',
       name: 'connect',
       component: ConnectionShell,
+    },
+    {
+      path: '/servers/:id/models',
+      name: 'server-models',
+      component: ServerModelsScreen,
     },
   ],
 })

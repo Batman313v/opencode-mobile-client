@@ -4,7 +4,21 @@ export function normalizeUrl(url: string): string {
     normalized = `http://${normalized}`
   }
   normalized = normalized.replace(/\/+$/, '')
+  try {
+    const parsed = new URL(normalized)
+    // A bare host gets opencode's default port so "100.x.y.z" reaches the server, not port 80.
+    if (parsed.protocol === 'http:' && !parsed.port && parsed.pathname === '/') {
+      normalized = `${normalized}:4096`
+    }
+  } catch {
+    // Not parseable yet (mid-typing); leave as-is for the validator to report.
+  }
   return normalized
+}
+
+/** "http://host:port" → "host:port"; the form's address field is scheme-free. */
+export function stripScheme(url: string): string {
+  return url.replace(/^https?:\/\//i, '')
 }
 
 export interface ValidationResult {
@@ -76,7 +90,7 @@ export function sanitizeUrlForDisplay(url: string): string {
   }
 }
 
-export function buildIframeUrl(baseUrl: string, username?: string, password?: string): string {
+export function buildWebviewUrl(baseUrl: string, username?: string, password?: string): string {
   const normalized = normalizeUrl(baseUrl)
   if (!username || !password) {
     return normalized + '/'
@@ -91,6 +105,6 @@ export function buildIframeUrl(baseUrl: string, username?: string, password?: st
   }
 }
 
-export function buildIframeUrlSanitized(baseUrl: string, _username?: string, _password?: string): string {
-  return sanitizeUrlForDisplay(buildIframeUrl(baseUrl, _username, _password))
+export function buildWebviewUrlSanitized(baseUrl: string, _username?: string, _password?: string): string {
+  return sanitizeUrlForDisplay(buildWebviewUrl(baseUrl, _username, _password))
 }

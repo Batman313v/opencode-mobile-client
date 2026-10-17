@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import {
   normalizeUrl,
+  stripScheme,
   validateUrl,
   sanitizeUrlForDisplay,
-  buildIframeUrl,
-  buildIframeUrlSanitized,
+  buildWebviewUrl,
+  buildWebviewUrlSanitized,
 } from '@/services/opencode/url'
 
 describe('normalizeUrl', () => {
@@ -26,6 +27,26 @@ describe('normalizeUrl', () => {
 
   it('trims whitespace', () => {
     expect(normalizeUrl('  http://localhost:4096  ')).toBe('http://localhost:4096')
+  })
+
+  it('adds the default port 4096 when a bare host has none', () => {
+    expect(normalizeUrl('100.98.238.5')).toBe('http://100.98.238.5:4096')
+  })
+
+  it('keeps an explicit port and leaves https hosts without a port alone', () => {
+    expect(normalizeUrl('10.0.0.5:9999')).toBe('http://10.0.0.5:9999')
+    expect(normalizeUrl('https://opencode.example.com/')).toBe('https://opencode.example.com')
+  })
+})
+
+describe('stripScheme', () => {
+  it('removes the http and https prefixes, keeping host and port', () => {
+    expect(stripScheme('http://100.98.238.5:4096')).toBe('100.98.238.5:4096')
+    expect(stripScheme('https://myserver.ts.net:8443')).toBe('myserver.ts.net:8443')
+  })
+
+  it('leaves scheme-free values untouched', () => {
+    expect(stripScheme('192.168.1.50:4096')).toBe('192.168.1.50:4096')
   })
 })
 
@@ -129,14 +150,14 @@ describe('sanitizeUrlForDisplay', () => {
   })
 })
 
-describe('buildIframeUrl', () => {
+describe('buildWebviewUrl', () => {
   it('builds plain URL when no auth', () => {
-    const url = buildIframeUrl('http://192.168.1.100:4096')
+    const url = buildWebviewUrl('http://192.168.1.100:4096')
     expect(url).toBe('http://192.168.1.100:4096/')
   })
 
   it('embeds credentials when auth provided', () => {
-    const url = buildIframeUrl('http://192.168.1.100:4096', 'opencode', 'secret123')
+    const url = buildWebviewUrl('http://192.168.1.100:4096', 'opencode', 'secret123')
     expect(url).toContain('opencode')
     expect(url).toContain('secret123')
     expect(url).toContain('@')
@@ -144,15 +165,15 @@ describe('buildIframeUrl', () => {
   })
 
   it('encodes special characters in credentials', () => {
-    const url = buildIframeUrl('http://host:4096', 'user name', 'pass word')
+    const url = buildWebviewUrl('http://host:4096', 'user name', 'pass word')
     expect(url).toContain('user%20name')
     expect(url).toContain('pass%20word')
   })
 })
 
-describe('buildIframeUrlSanitized', () => {
+describe('buildWebviewUrlSanitized', () => {
   it('hides credentials in output', () => {
-    const result = buildIframeUrlSanitized('http://host:4096', 'opencode', 'secret')
+    const result = buildWebviewUrlSanitized('http://host:4096', 'opencode', 'secret')
     expect(result).not.toContain('secret')
     expect(result).not.toContain('opencode@')
     expect(result).toContain('host')

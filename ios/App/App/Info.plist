@@ -26,6 +26,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>The camera is used to scan the QR code shown by "opencode pair" when adding a server.</string>
 	<!--
 		App Store review note:
 		OpenCode Mobile connects to user-provided OpenCode servers. Local/private

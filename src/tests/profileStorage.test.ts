@@ -17,7 +17,6 @@ function createProfile(overrides: Record<string, any> = {}) {
     baseUrl: 'http://192.168.1.100:4096',
     authEnabled: false,
     username: 'opencode',
-    isDefault: false,
     allowInsecureHttp: true,
     lastStatus: 'unknown' as const,
     lastConnectedAt: null,
@@ -62,17 +61,6 @@ describe('profileStorage', () => {
       expect(profile.name).toBe('Test Server')
     })
 
-    it('sets default and unsets others', async () => {
-      const existing = [createProfile({ id: 'default-1', isDefault: true })]
-      vi.mocked(Preferences.get).mockResolvedValue({ value: JSON.stringify(existing) })
-      const profile = await profileStorage.createProfile(createProfile({ id: undefined, isDefault: true }))
-      expect(profile.isDefault).toBe(true)
-
-      const savedJson = vi.mocked(Preferences.set).mock.calls[0][0].value
-      const saved = JSON.parse(savedJson)
-      expect(saved.find((p: any) => p.id === 'default-1').isDefault).toBe(false)
-      expect(saved.find((p: any) => p.id === profile.id).isDefault).toBe(true)
-    })
   })
 
   describe('updateProfile', () => {
@@ -110,58 +98,4 @@ describe('profileStorage', () => {
     })
   })
 
-  describe('getDefaultProfile', () => {
-    it('finds the default profile', async () => {
-      const existing = [
-        createProfile({ id: 'a', isDefault: false }),
-        createProfile({ id: 'b', isDefault: true }),
-      ]
-      vi.mocked(Preferences.get).mockResolvedValue({ value: JSON.stringify(existing) })
-      const defaultProfile = await profileStorage.getDefaultProfile()
-      expect(defaultProfile?.id).toBe('b')
-    })
-
-    it('returns undefined when no default', async () => {
-      const existing = [createProfile({ id: 'a', isDefault: false })]
-      vi.mocked(Preferences.get).mockResolvedValue({ value: JSON.stringify(existing) })
-      const defaultProfile = await profileStorage.getDefaultProfile()
-      expect(defaultProfile).toBeUndefined()
-    })
-  })
-
-  describe('setDefaultProfile', () => {
-    it('sets profile as default and unsets others', async () => {
-      const existing = [
-        createProfile({ id: 'a', isDefault: false }),
-        createProfile({ id: 'b', isDefault: true }),
-      ]
-      vi.mocked(Preferences.get).mockResolvedValue({ value: JSON.stringify(existing) })
-      const updated = await profileStorage.setDefaultProfile('a')
-      expect(updated?.id).toBe('a')
-      expect(updated?.isDefault).toBe(true)
-
-      const savedJson = vi.mocked(Preferences.set).mock.calls[0][0].value
-      const saved = JSON.parse(savedJson)
-      expect(saved.find((p: any) => p.id === 'a').isDefault).toBe(true)
-      expect(saved.find((p: any) => p.id === 'b').isDefault).toBe(false)
-    })
-  })
-
-  describe('duplicateProfile', () => {
-    it('duplicates a profile with (copy) suffix', async () => {
-      const existing = [createProfile({ id: 'original', name: 'My Server' })]
-      vi.mocked(Preferences.get).mockResolvedValue({ value: JSON.stringify(existing) })
-      const dup = await profileStorage.duplicateProfile('original')
-      expect(dup?.id).not.toBe('original')
-      expect(dup?.name).toBe('My Server (copy)')
-      expect(dup?.isDefault).toBe(false)
-      expect(dup?.lastStatus).toBe('unknown')
-    })
-
-    it('returns undefined for non-existent original', async () => {
-      vi.mocked(Preferences.get).mockResolvedValue({ value: '[]' })
-      const dup = await profileStorage.duplicateProfile('non-existent')
-      expect(dup).toBeUndefined()
-    })
-  })
 })

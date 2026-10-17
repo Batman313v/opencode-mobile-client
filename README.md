@@ -16,9 +16,12 @@ Chat with your agents from your phone while they and the server run on your comp
 - ⌨️ Toggleable Enter=newline mode (Enter inserts a newline, Shift+Enter sends the prompt)
 - 📱 Injects narrow-screen fixes to the stock OpenCode web UI
 - 📋 Multiple server profiles with auto-connect support
+- 🧠 Per-server model visibility — show/hide models across all sessions on that server
 - 🔑 Basic Auth support (matching OpenCode's `OPENCODE_SERVER_PASSWORD`)
+- 📷 QR pairing — enter the server's reachable address (IP + port, e.g. its Tailscale IP), then scan the `opencode pair` QR code; the QR itself may only carry 127.0.0.1, so the code is redeemed at your entered address
 - 🎛️ Pull-down menu for server management while connected. Pull to refresh, tap ⋮ to open menu.
 - ❤️ Automatic health checks with exponential reconnect
+- 🔔 Native notifications through your own [ntfy](https://ntfy.sh) instance — session-complete alerts and approval requests you can resolve from the phone (**Approve / Always allow / Deny** on Android), even while the app is backgrounded
 - 🔒 Secure storage for passwords (Keychain/EncryptedSharedPreferences)
 - 🌓 Dark theme with light theme support (`prefers-color-scheme`)
 
@@ -51,6 +54,53 @@ When auth is enabled, the username defaults to `opencode` in the app. Find more 
 
 ---
 
+## Push notifications (ntfy)
+
+The app has **no push infrastructure of its own** — no FCM, no relay server. Instead, a small plugin bundled in this repo runs inside each OpenCode server process and publishes session events to an [ntfy](https://ntfy.sh) topic; the app subscribes to that one topic (natively on Android, so notifications keep arriving while the app is backgrounded). The ntfy instance must run **v2** — the app subscribes through the topic's `/sse` stream endpoint.
+
+### 1. Install the bridge plugin on each server
+
+```bash
+mkdir -p ~/.config/opencode/plugins
+cp <this-repo>/src/opencode-plugin/ntfy-bridge.ts ~/.config/opencode/plugins/ntfy-bridge.ts
+```
+
+OpenCode auto-discovers `.ts` files in that directory. Then create a **machine-specific** config file next to it:
+
+```json
+{
+  "serverUrl":  "http://100.64.0.5:4096",
+  "ntfyServer": "https://notify.example.net",
+  "topic":      "opencode-mobile"
+}
+```
+
+- `serverUrl` — the address your **phone** reaches this server at (Tailscale or LAN). It is embedded in approval notifications so the phone can send the reply back. Never use `127.0.0.1`.
+- `ntfyServer` / `topic` — must match what you enter in the app's Settings.
+- `serverName` — optional, defaults to the machine hostname; shown in notification titles.
+
+> ⚠️ If you sync `~/.config/opencode` across machines (git / Syncthing), **exclude `ntfy-bridge.json`** — each machine needs its own `serverUrl`. A missing or invalid config disables the plugin with a console warning; it never crashes OpenCode.
+
+Restart the server, then verify delivery from any device:
+
+```bash
+curl -N https://notify.example.net/opencode-mobile/sse
+```
+
+You should see an `event: open` frame immediately, then JSON message frames as sessions go idle or permissions are requested. (On ntfy v2 the bare topic path serves the web app — always append `/sse` for streaming.) Publishing uses no auth header — if your ntfy instance protects topics with access tokens, keep this topic open and set the token in the app instead (it applies to subscription only).
+
+### 2. Configure the app
+
+**Settings → Notifications**: enable the toggle and enter the **ntfy server URL**, **topic** and optional **access token** that match the plugin's config. Defaults: `https://ntfy.sh` with no topic. To set up notifications you must create your own topic (on ntfy.sh or a self-hosted instance) and enter it in **both** the app settings and the plugin's `ntfy-bridge.json` — the two must match exactly.
+
+- **Session finished** — posted when an execution that started while the bridge was listening completes successfully (`session.execution.started` → `succeeded`, once per turn); the title is "Task finished" and the body names the project that finished (falling back to the session title when the project cannot be determined).
+- **Approval needed** — posted for every permission request. On Android the notification carries **Approve**, **Always allow** and **Deny** buttons that resolve the request on the server directly (`POST /api/session/{id}/permission/{requestID}/reply`); a short-lived result notification confirms the outcome (approved / denied / already handled). The notification dismisses itself when the request is settled anywhere — phone, CLI, or the web UI — and the same applies to **Waiting for input** notifications once the question is answered.
+- Anything else published to the topic renders as a plain-text notification, so other tools can share it.
+
+> Approval notifications only appear when your server actually *asks*: with auto-approve rules nothing is ever requested. To get them, set ask-rules in `opencode.json`, e.g. `"permission": { "edit": "ask", "bash": "ask" }`.
+
+---
+
 ## Troubleshooting
 
 ### Cannot connect
@@ -70,28 +120,23 @@ When auth is enabled, the username defaults to `opencode` in the app. Find more 
 - The stored username or password does not match the server.
 - Try connecting with the correct credentials via curl first: `curl -u opencode:your-password http://server:4096/`
 
-### Blank iframe
-
-- The health check succeeded but the iframe shows nothing after 8 seconds.
-- The OpenCode Web UI may be sending headers that block embedding (`X-Frame-Options: DENY` or `Content-Security-Policy: frame-ancestors 'none'`).
-- Workaround: Use the "Open in isolated native webview" option from the menu (requires `@capgo/capacitor-inappbrowser`).
-
 ### HTTP blocked on Android/iOS
 
 - Android: Ensure `android:networkSecurityConfig` allows cleartext (see Android Setup above).
 - iOS: Ensure `NSAllowsLocalNetworking` is set in `Info.plist` (see iOS Setup above).
 
-### Works in native app but not browser dev mode (CORS)
+### Notifications don't appear at all
 
-- This is expected. The web dev server at `localhost:5173` has a different origin than your OpenCode server.
-- Use the native app build, or configure the OpenCode server to allow your dev origin via CORS headers.
-- The `CapacitorHttp` plugin bypasses CORS on native, which is why health checks work in the app.
+- Enable them in **Settings → Notifications** (the app asks for OS permission on first launch).
+- The ntfy URL and topic in Settings must match the plugin's `ntfy-bridge.json` exactly. Verify what actually reaches the topic from any device: `curl -N {ntfyServer}/{topic}/sse` — if nothing shows up when a session finishes, the problem is server-side (plugin not installed, bad config, or server not restarted).
+- The server must run **OpenCode v2** — the plugin consumes the v2 event bus.
+- On Android, notifications are posted by a foreground service that survives screen-off and even OS process reclaims; force-stopping the app stops monitoring until it is opened again. iOS suspends backgrounded apps, so there notifications arrive only while the app is running.
 
-### Server reachable but embedding blocked
+### Approvals from the phone fail ("Could not respond")
 
-- Some OpenCode deployments may send `X-Frame-Options: DENY` or `Content-Security-Policy: frame-ancestors 'none'`.
-- The app detects this after 8 seconds and offers a "Refresh" button.
-- If the issue persists, use the menu → "Open in isolated native webview" fallback.
+- `serverUrl` in the plugin's config must be reachable **from your phone** — a Tailscale or LAN address, never `127.0.0.1`.
+- If the server uses Basic Auth, store matching credentials in that server profile — the reply is sent with them when present, anonymously otherwise (which fails on password-protected servers).
+- A short result notification confirms whether the server accepted your reply: approved, denied, or "could not respond" (for example when the request was already resolved elsewhere).
 
 ---
 
@@ -170,10 +215,13 @@ src/
   main.ts                          App entry
   App.vue                          Root component
   types.ts                         TypeScript type definitions
+  i18n/index.ts                    Lightweight i18n (8 locales)
   router/index.ts                  Vue Router config
   stores/
     serverStore.ts                 Pinia store for server profiles
     connectionStore.ts             Pinia store for connection state
+  composables/
+    useServerHealthPoll.ts         Periodic health checks across all servers
   services/
     storage/
       profileStorage.ts            Server profile CRUD via Preferences
@@ -184,17 +232,29 @@ src/
       url.ts                       URL normalization, validation, sanitization
       auth.ts                      Basic Auth header generation
       health.ts                    Server health check via native HTTP
+      events.ts                    SSE parser, ntfy frame mapping + auto-reconnecting /sse stream client (since= resume)
+      ntfyTopicMonitor.ts          JS topic monitor for non-Android platforms (one subscription while the app is active)
+      modelVisibility.ts           Model catalog fetch, default-visibility rules, webview state merge script
+      pairing.ts                   opencode pair QR/link/code parsing + one-time code redemption (supplied address, then Tailscale-first)
+      demoMode.ts                  Demo-mode detection (mock session)
+    opencode-plugin/
+      ntfy-bridge.ts               OpenCode v2 plugin — publishes session/permission events to ntfy (runs on each server, see "Push notifications")
+      opencode-plugin.d.ts         Ambient type stub for @opencode/plugin (provided by the host at runtime)
     platform/
       systemBars.ts                Status/navigation bar configuration
       backButton.ts                Android back button handler
+      listeningService.ts          Wrapper for the native ServerEvents plugin (Android foreground service subscribing to the ntfy topic)
+      nativeNotifications.ts       Local notification emit, settings + app-level pipeline orchestration
   components/
-    LandingScreen.vue              App landing page
-    ServerList.vue                 Server profile list
+    ServerList.vue                 Main page — server profile list
     ServerProfileForm.vue          Add/edit server form
-    ConnectionShell.vue            Full-screen iframe shell
-    TopPullMenu.vue                Pull-down menu overlay
+    ConnectionShell.vue            Full-screen native web view shell (OpenCode UI)
+    ServerModelsScreen.vue         Per-server model visibility screen
+    SettingsScreen.vue             App settings (incl. help link)
+    HelpScreen.vue                 Setup and troubleshooting guide
+    DemoSessionMock.vue            Mock session for demo mode
     StatusDot.vue                  Status indicator
-    SettingsScreen.vue             App settings
+    StoreBadges.vue                Play/App Store badges
     ConfirmDialog.vue              Reusable confirmation dialog
   styles/
     base.css                       Global styles, buttons, dark/light theme
@@ -202,8 +262,14 @@ src/
   tests/
     url.test.ts                    URL unit tests
     auth.test.ts                   Auth unit tests
+    health.test.ts                 Health check classification unit tests
     profileStorage.test.ts         Profile storage unit tests
     connectionState.test.ts        Connection state unit tests
+    events.test.ts                 SSE frame parser, ntfy → notification mapping + stream client unit tests
+    ntfyTopicMonitor.test.ts       Topic monitor reconciliation (open / close / re-subscribe) + frame fan-out unit tests
+    ntfyBridge.test.ts             Bridge plugin: config parsing/validation, execution start/success transitions, permission payloads
+    modelVisibility.test.ts        Model catalog fetch, default-visibility rules, state merge script unit tests
+    nativeNotifications.test.ts    Notification settings/emit + pipeline orchestration unit tests
 ```
 
 ---
@@ -229,27 +295,29 @@ The app allows connecting to HTTP servers because OpenCode servers commonly run 
 - Passwords are never logged, never shown in the UI by default, and never included in error messages.
 - The `sanitizeUrlForDisplay()` helper strips credentials from URLs before display or logging.
 
-### Iframe authentication compromise
+### Web view credentials
 
-When Basic Auth is enabled, the app constructs an iframe URL with embedded credentials (`http://username:password@host:port/`) because browsers do not allow setting custom `Authorization` headers on iframe requests. This credential-in-URL approach is a known limitation:
+When Basic Auth is enabled:
 
-- The full-credential URL is built only at the moment of iframe `src` assignment and is **never stored**.
-- It is **never logged** or displayed.
-- For production remote access, prefer HTTPS + VPN to avoid passing credentials in URLs.
+- **iOS**: WKWebView cannot set an `Authorization` header, so credentials are embedded in the web view URL (`http://username:password@host:port/`). The full-credential URL is built only at open time and is **never stored**, logged, or displayed.
+- **Android**: credentials are passed to the web view via its native `credentials` option — they never appear in a URL.
+
+For production remote access, prefer HTTPS + VPN so credentials do not travel over cleartext HTTP.
 
 ### Auth-less mode
 
-When authentication is disabled on the server, the iframe loads the plain URL without any credentials.
+When authentication is disabled on the server, the web view loads the plain URL without any credentials.
 
 ---
 
 ## Known Limitations
 
-1. **iframe authentication**: Basic Auth credentials must be passed in the iframe URL (browser security restriction). Credentials are never stored in this form.
-2. **Frame-blocking headers**: Some OpenCode deployments may block iframe embedding. The app detects this and offers a fallback native webview option.
+1. **iOS credential-in-URL**: On iOS, Basic Auth credentials must be embedded in the web view URL (WKWebView cannot set an `Authorization` header). The URL is built at open time and never stored or logged.
+2. **ntfy + OpenCode v2 required for notifications**: Each server runs the bundled `ntfy-bridge` plugin (v2 event bus) publishing to a shared ntfy topic; the app keeps one subscription instead of one per server. No FCM or push relay is involved — see "Push notifications (ntfy)" above.
 3. **Web dev CORS**: Health checks in browser dev mode may be blocked by CORS. Native builds use `CapacitorHttp` which bypasses this.
-4. **Single iframe**: Only one OpenCode session at a time. The app shows one server's UI in the full screen.
-5. **No server push notifications**: The app does not receive background push from OpenCode, but web notifications emitted by the connected OpenCode UI are re-emitted as local native notifications while the WebView is open.
+4. **Single web view**: Only one OpenCode session at a time. The app shows one server's UI in the full screen.
+5. **Notifications need a live app process (no FCM/push relay)**: On Android this runs natively inside a `specialUse` foreground service — not subject to the 6-hour background limit — with its config persisted so monitoring survives OS process reclaims; force-stopping the app stops it until next launch. iOS suspends backgrounded apps, so there notifications are delivered only while the app is running (via a JS topic monitor). The Approve / Always allow / Deny buttons exist on Android only; approval replies go to `serverUrl` in each machine's plugin config, which must be reachable from the phone.
+6. **Model visibility applies on load**: Per-server show/hide overrides are merged into OpenCode's own persisted model state when the web view loads; if anything actually changed, one automatic reload happens so the UI picks up the new values.
 
 ---
 

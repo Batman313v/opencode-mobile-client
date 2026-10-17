@@ -1,13 +1,19 @@
+export interface ModelVisibilityEntry {
+  providerID: string
+  modelID: string
+  visibility: 'show' | 'hide'
+}
+
 export interface ServerProfile {
   id: string
   name: string
   baseUrl: string
   authEnabled: boolean
   username: string
-  isDefault: boolean
   allowInsecureHttp: boolean
   lastStatus: ServerStatus
   lastConnectedAt: string | null
+  modelVisibility?: ModelVisibilityEntry[]
 }
 
 export type ServerStatus =
@@ -17,7 +23,6 @@ export type ServerStatus =
   | 'auth_required'
   | 'wrong_credentials'
   | 'unreachable'
-  | 'frame_blocked'
 
 export type ConnectionState = ServerStatus | 'idle' | 'reconnecting' | 'disconnected'
 

@@ -38,6 +38,20 @@
             </p>
           </div>
         </div>
+        <div class="mt-4 flex flex-col gap-3">
+          <div class="flex flex-col gap-1.5">
+            <Label>{{ t('settings.ntfyServerUrl') }}</Label>
+            <Input v-model="ntfyServerUrl" type="url" inputmode="url" autocomplete="off" spellcheck="false" class="w-full text-muted-foreground" />
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <Label>{{ t('settings.ntfyTopic') }}</Label>
+            <Input v-model="ntfyTopic" inputmode="text" autocomplete="off" spellcheck="false" class="w-full text-muted-foreground" />
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <Label>{{ t('settings.ntfyToken') }}</Label>
+            <Input v-model="ntfyToken" type="password" autocomplete="off" spellcheck="false" class="w-full text-muted-foreground" />
+          </div>
+        </div>
         <div class="mt-5 flex flex-col items-center gap-3">
           <p class="text-xs text-muted-foreground text-center leading-relaxed">🔃 Seamlessly continue sessions started on your computer from your phone, or vice versa.</p>
           <StoreBadges />
@@ -48,6 +62,7 @@
         <h2 class="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{{ t('settings.about') }}</h2>
         <p class="text-sm mb-2">OpenCode Mobile &lt;Client&gt;</p>
         <p class="text-xs text-muted-foreground leading-relaxed" v-html="t('settings.aboutText')" />
+        <Button variant="ghost" class="mt-4" @click="openHelp">{{ t('common.help') }}</Button>
       </section>
       <section>
         <h2 class="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{{ t('settings.language') }}</h2>
@@ -60,7 +75,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
@@ -70,9 +85,11 @@ import { Switch } from '@/components/ui/switch'
 import StoreBadges from '@/components/StoreBadges.vue'
 import { useConnectionStore } from '@/stores/connectionStore'
 import {
+  applyNotificationState,
   disableNativeNotificationsFromSettings,
   enableNativeNotificationsFromSettings,
   loadNativeNotificationSettings,
+  saveNtfySettings,
 } from '@/services/platform/nativeNotifications'
 import { useI18n, type Locale } from '@/i18n'
 
@@ -84,11 +101,17 @@ const timeoutMs = ref(connectionStore.healthCheckTimeout)
 const pollMs = ref(connectionStore.healthPollInterval)
 const exponentialReconnect = ref(connectionStore.exponentialReconnectEnabled)
 const notificationsEnabled = ref(false)
+const ntfyServerUrl = ref('')
+const ntfyTopic = ref('')
+const ntfyToken = ref('')
 
 let notificationsLoaded = false
 let syncingNotificationsSwitch = false
+let ntfyApplyTimer: ReturnType<typeof setTimeout> | null = null
 
-watch(locale, (value) => setLocale(value as Locale))
+// Re-applying the pipeline after a locale change refreshes the translated labels baked into
+// the native Android service's notification texts.
+watch(locale, (value) => { setLocale(value as Locale); void applyNotificationState() })
 
 watch(timeoutMs, (val) => { if (val >= 1000 && val <= 30000) connectionStore.setHealthCheckTimeout(val) })
 watch(pollMs, (val) => { if (val >= 2000 && val <= 60000) connectionStore.setHealthPollInterval(val) })
@@ -102,17 +125,41 @@ watch(notificationsEnabled, async (val) => {
       syncingNotificationsSwitch = true
       notificationsEnabled.value = false
       syncingNotificationsSwitch = false
+      return
     }
   } else {
     await disableNativeNotificationsFromSettings()
   }
+
+  void applyNotificationState()
+})
+
+// Persist ntfy transport edits immediately, but debounce the pipeline re-apply so typing a URL
+// does not restart the native subscription on every keystroke.
+watch([ntfyServerUrl, ntfyTopic, ntfyToken], () => {
+  if (!notificationsLoaded) return
+  void saveNtfySettings({ serverUrl: ntfyServerUrl.value, topic: ntfyTopic.value, token: ntfyToken.value })
+  if (ntfyApplyTimer !== null) clearTimeout(ntfyApplyTimer)
+  ntfyApplyTimer = setTimeout(() => {
+    ntfyApplyTimer = null
+    void applyNotificationState()
+  }, 500)
+})
+
+onBeforeUnmount(() => {
+  if (ntfyApplyTimer !== null) clearTimeout(ntfyApplyTimer)
 })
 
 onMounted(async () => {
   const settings = await loadNativeNotificationSettings()
   notificationsEnabled.value = settings.enabled
+  ntfyServerUrl.value = settings.ntfyServerUrl
+  ntfyTopic.value = settings.ntfyTopic
+  ntfyToken.value = settings.ntfyToken
+  // Set the loaded flag last so the watcher above ignores the initial assignments.
   notificationsLoaded = true
 })
 
 function goBack(): void { router.push('/') }
+function openHelp(): void { router.push('/help') }
 </script>

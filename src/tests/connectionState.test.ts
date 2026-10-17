@@ -52,7 +52,6 @@ describe('connectionStore', () => {
       baseUrl: 'http://192.168.1.100:4096',
       authEnabled: false,
       username: 'opencode',
-      isDefault: false,
       allowInsecureHttp: true,
       lastStatus: 'unknown',
       lastConnectedAt: null,
@@ -78,7 +77,6 @@ describe('connectionStore', () => {
       baseUrl: 'http://192.168.1.100:4096',
       authEnabled: false,
       username: 'opencode',
-      isDefault: false,
       allowInsecureHttp: true,
       lastStatus: 'unknown',
       lastConnectedAt: null,
@@ -105,7 +103,6 @@ describe('connectionStore', () => {
       baseUrl: 'http://192.168.1.100:4096',
       authEnabled: true,
       username: 'opencode',
-      isDefault: false,
       allowInsecureHttp: true,
       lastStatus: 'unknown',
       lastConnectedAt: null,
@@ -133,7 +130,6 @@ describe('connectionStore', () => {
       baseUrl: 'http://192.168.1.100:4096',
       authEnabled: true,
       username: 'opencode',
-      isDefault: false,
       allowInsecureHttp: true,
       lastStatus: 'unknown',
       lastConnectedAt: null,
@@ -152,13 +148,6 @@ describe('connectionStore', () => {
     expect(store.state).toBe('disconnected')
     expect(store.activeServerId).toBeNull()
     expect(store.lastError).toBeNull()
-  })
-
-  it('setFrameBlocked updates state', () => {
-    const store = useConnectionStore()
-    store.setFrameBlocked()
-    expect(store.state).toBe('frame_blocked')
-    expect(store.iframeLoadingFailed).toBe(true)
   })
 
   it('cancelReconnect stops reconnection', () => {

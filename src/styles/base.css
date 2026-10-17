@@ -136,4 +136,14 @@
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
   }
+
+  /* QR scanning (ServerProfileForm.vue): the native camera preview sits behind a
+     transparent webview, so everything must be see-through except the scanner overlay. */
+  html.qr-scanning,
+  html.qr-scanning body {
+    background-color: transparent !important;
+  }
+  html.qr-scanning #app {
+    display: none;
+  }
 }

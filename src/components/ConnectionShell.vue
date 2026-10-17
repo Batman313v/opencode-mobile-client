@@ -31,15 +31,9 @@ import { App } from '@capacitor/app'
 import { useServerStore } from '@/stores/serverStore'
 import { useConnectionStore } from '@/stores/connectionStore'
 import { registerBackButton, unregisterBackButton } from '@/services/platform/backButton'
-import { buildIframeUrl } from '@/services/opencode/url'
+import { buildWebviewUrl } from '@/services/opencode/url'
 import { isDemoModeServer } from '@/services/opencode/demoMode'
-import {
-  approveNativeNotificationsFromPrompt,
-  denyNativeNotificationsFromPrompt,
-  emitNativeNotificationFromWebMessage,
-  getNativeNotificationDecision,
-  WEB_NOTIFICATION_MESSAGE_TYPE,
-} from '@/services/platform/nativeNotifications'
+import { buildModelVisibilityScript } from '@/services/opencode/modelVisibility'
 import { useI18n } from '@/i18n'
 
 const route = useRoute()
@@ -57,83 +51,15 @@ const demoModeActive = ref(false)
 
 let browserClosedHandle: any = null
 let pageLoadedHandle: any = null
-let messageFromWebviewHandle: any = null
 let appStateHandle: any = null
-let notificationPromptResolver: ((value: boolean) => void) | null = null
-let notificationPromptPromise: Promise<boolean> | null = null
 
 function removeWebviewListeners(): void {
   if (browserClosedHandle) void browserClosedHandle.remove()
   if (pageLoadedHandle) void pageLoadedHandle.remove()
-  if (messageFromWebviewHandle) void messageFromWebviewHandle.remove()
   if (appStateHandle) void appStateHandle.remove()
   browserClosedHandle = null
   pageLoadedHandle = null
-  messageFromWebviewHandle = null
   appStateHandle = null
-}
-
-const WEB_NOTIFICATION_PROMPT_RESPONSE_MESSAGE_TYPE = 'opencode:web-notification-prompt-response'
-
-function buildNotificationBridgeScript(): string {
-  return `(function(){
-    if(window.__oc_nativeNotificationBridge)return;
-    window.__oc_nativeNotificationBridge=true;
-    function post(payload,attempt){
-      var app=window.mobileApp;
-      if(app&&typeof app.postMessage==='function'){
-        app.postMessage({detail:payload});
-        return;
-      }
-      if(attempt<20)setTimeout(function(){post(payload,attempt+1);},50);
-    }
-    function send(title,options){
-      try{
-        options=options||{};
-        post({
-          type:'${WEB_NOTIFICATION_MESSAGE_TYPE}',
-          title:String(title||'OpenCode'),
-          body:options.body?String(options.body):'',
-          tag:options.tag?String(options.tag):'',
-          icon:options.icon?String(options.icon):'',
-          silent:Boolean(options.silent)
-        },0);
-      }catch(e){}
-    }
-    function MobileNotification(title,options){
-      this.title=String(title||'OpenCode');
-      this.body=options&&options.body?String(options.body):'';
-      this.tag=options&&options.tag?String(options.tag):'';
-      this.icon=options&&options.icon?String(options.icon):'';
-      this.onclick=null;this.onerror=null;this.onclose=null;this.onshow=null;
-      send(title,options);
-      var self=this;
-      setTimeout(function(){if(typeof self.onshow==='function')self.onshow(new Event('show'));},0);
-    }
-    MobileNotification.permission='granted';
-    MobileNotification.requestPermission=function(callback){
-      var promise=Promise.resolve('granted');
-      if(typeof callback==='function')promise.then(callback);
-      return promise;
-    };
-    MobileNotification.prototype.close=function(){
-      if(typeof this.onclose==='function')this.onclose(new Event('close'));
-    };
-    MobileNotification.prototype.addEventListener=function(type,listener){
-      if(type&&typeof listener==='function')this['on'+type]=listener;
-    };
-    MobileNotification.prototype.removeEventListener=function(type,listener){
-      if(type&&this['on'+type]===listener)this['on'+type]=null;
-    };
-    MobileNotification.prototype.dispatchEvent=function(event){
-      var handler=event&&event.type?this['on'+event.type]:null;
-      if(typeof handler==='function')handler.call(this,event);
-      return true;
-    };
-    try{Object.defineProperty(MobileNotification,'name',{value:'Notification'});}catch(e){}
-    try{Object.defineProperty(window,'Notification',{configurable:true,writable:true,value:MobileNotification});}
-    catch(e){window.Notification=MobileNotification;}
-  })();`
 }
 
 function jsStringLiteral(value: string): string {
@@ -149,7 +75,7 @@ function buildToolbarScript(status: string, displayUrl: string): string {
   const dotColor =
     status === 'connected' ? '#30d158' :
     status === 'checking' || status === 'reconnecting' ? '#ffd60a' :
-    status === 'disconnected' || status === 'unreachable' || status === 'wrong_credentials' || status === 'frame_blocked' ? '#ff453a' :
+    status === 'disconnected' || status === 'unreachable' || status === 'wrong_credentials' ? '#ff453a' :
     '#8e8e8e'
 
   const pulse = status === 'checking' || status === 'reconnecting'
@@ -162,7 +88,6 @@ function buildToolbarScript(status: string, displayUrl: string): string {
     status === 'auth_required' ? t('status.authRequired') :
     status === 'wrong_credentials' ? t('status.wrongCredentials') :
     status === 'unreachable' ? t('status.unreachable') :
-    status === 'frame_blocked' ? t('status.blocked') :
     status
 
   const statusLabelLiteral = jsStringLiteral(statusLabel)
@@ -438,83 +363,6 @@ function buildMobileComposerFixScript(): string {
   })();`
 }
 
-function ellipsize(value: string, maxLength = 140): string {
-  return value.length > maxLength ? `${value.slice(0, maxLength - 3)}...` : value
-}
-
-function getNotificationPromptPreview(detail: unknown): string {
-  const record = detail && typeof detail === 'object' ? detail as Record<string, unknown> : {}
-  const title = typeof record.title === 'string' ? record.title.trim() : ''
-  const body = typeof record.body === 'string' ? record.body.trim() : ''
-  return ellipsize([title, body].filter(Boolean).join('\n') || 'OpenCode notification')
-}
-
-function buildNotificationApprovalPromptScript(preview: string): string {
-  return `(function(){
-    function mount(){
-    if(!document.body){setTimeout(mount,50);return;}
-    var old=document.getElementById('oc-notification-permission-modal');
-    if(old)old.remove();
-    var style=document.createElement('style');
-    style.id='oc-notification-permission-style';
-    style.textContent='#oc-notification-permission-modal{position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.54);display:flex;align-items:center;justify-content:center;padding:20px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#f5f5f7}#oc-notification-permission-box{width:min(330px,100%);background:#1c1c1e;border:1px solid rgba(255,255,255,.14);border-radius:14px;box-shadow:0 16px 44px rgba(0,0,0,.5);overflow:hidden}#oc-notification-permission-content{padding:18px 18px 14px;display:flex;flex-direction:column;gap:12px}#oc-notification-permission-title{font-size:17px;font-weight:700;line-height:1.25;text-align:center}#oc-notification-permission-message{font-size:13px;line-height:1.38;color:rgba(245,245,247,.78);text-align:center}#oc-notification-permission-preview{font-size:13px;line-height:1.35;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:10px;white-space:pre-wrap;word-break:break-word;max-height:88px;overflow:hidden}#oc-notification-permission-foot{font-size:12px;line-height:1.3;color:rgba(245,245,247,.58);text-align:center}#oc-notification-permission-actions{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid rgba(255,255,255,.12)}#oc-notification-permission-actions button{appearance:none;border:0;background:transparent;color:#0a84ff;font-size:16px;padding:13px 8px;font-weight:600}#oc-notification-permission-actions button:first-child{border-right:1px solid rgba(255,255,255,.12);font-weight:500;color:rgba(245,245,247,.8)}';
-    document.head.appendChild(style);
-    var modal=document.createElement('div');
-    modal.id='oc-notification-permission-modal';
-    modal.innerHTML='<div id="oc-notification-permission-box"><div id="oc-notification-permission-content"><div id="oc-notification-permission-title">${t('settings.notifications')}</div><div id="oc-notification-permission-message">${t('settings.notificationDescription')}</div><div id="oc-notification-permission-preview"></div></div><div id="oc-notification-permission-actions"><button type="button" data-choice="no">${t('common.cancel')}</button><button type="button" data-choice="yes">${t('common.confirm')}</button></div></div>';
-    modal.querySelector('#oc-notification-permission-preview').textContent=${JSON.stringify(preview)};
-    function respond(accepted){
-      try{window.mobileApp&&window.mobileApp.postMessage&&window.mobileApp.postMessage({detail:{type:'${WEB_NOTIFICATION_PROMPT_RESPONSE_MESSAGE_TYPE}',accepted:accepted}});}catch(e){}
-      modal.remove();
-    }
-    modal.querySelector('[data-choice="yes"]').addEventListener('click',function(){respond(true);});
-    modal.querySelector('[data-choice="no"]').addEventListener('click',function(){respond(false);});
-    document.body.appendChild(modal);
-    }
-    mount();
-  })();`
-}
-
-async function askForNativeNotificationApproval(detail: unknown): Promise<boolean> {
-  if (notificationPromptPromise) return notificationPromptPromise
-
-  notificationPromptPromise = new Promise((resolve) => {
-    notificationPromptResolver = resolve
-  })
-  const promptPromise = notificationPromptPromise
-
-  try {
-    await InAppBrowser.executeScript({ code: buildNotificationApprovalPromptScript(getNotificationPromptPreview(detail)) })
-  } catch {
-    resolveNotificationPrompt(false)
-  }
-  return promptPromise
-}
-
-function resolveNotificationPrompt(accepted: boolean): void {
-  notificationPromptResolver?.(accepted)
-  notificationPromptResolver = null
-  notificationPromptPromise = null
-}
-
-async function handleWebviewNotificationMessage(detail: unknown): Promise<void> {
-  const decision = await getNativeNotificationDecision()
-  if (decision === 'ignore') return
-
-  if (decision === 'ask') {
-    const accepted = await askForNativeNotificationApproval(detail)
-    if (!accepted) {
-      await denyNativeNotificationsFromPrompt()
-      return
-    }
-
-    const granted = await approveNativeNotificationsFromPrompt()
-    if (!granted) return
-  }
-
-  await emitNativeNotificationFromWebMessage(detail, profile.value?.name ?? 'OpenCode')
-}
-
 onMounted(async () => {
   await serverStore.load()
   if (!profile.value) { router.push('/'); return }
@@ -545,7 +393,6 @@ onMounted(async () => {
 onUnmounted(() => {
   unregisterBackButton()
   removeWebviewListeners()
-  resolveNotificationPrompt(false)
 })
 
 async function isCurrentProfileDemoMode(): Promise<boolean> {
@@ -563,31 +410,25 @@ async function openInAppBrowser(): Promise<void> {
   const pw = await serverStore.getPassword(profile.value!.id)
   const auth = profile.value!.authEnabled && pw
   const url = isIOS && auth
-    ? buildIframeUrl(profile.value!.baseUrl, profile.value!.username, pw!)
-    : buildIframeUrl(profile.value!.baseUrl)
+    ? buildWebviewUrl(profile.value!.baseUrl, profile.value!.username, pw!)
+    : buildWebviewUrl(profile.value!.baseUrl)
 
   browserClosedHandle = await InAppBrowser.addListener('closeEvent', () => {
     connectionStore.disconnect()
     removeWebviewListeners()
-    resolveNotificationPrompt(false)
     router.push('/')
-  })
-
-  messageFromWebviewHandle = await InAppBrowser.addListener('messageFromWebview', (event) => {
-    if (event.detail?.type === WEB_NOTIFICATION_PROMPT_RESPONSE_MESSAGE_TYPE) {
-      resolveNotificationPrompt(Boolean(event.detail.accepted))
-      return
-    }
-
-    if (event.detail?.type === WEB_NOTIFICATION_MESSAGE_TYPE) {
-      void handleWebviewNotificationMessage(event.detail)
-    }
   })
 
   pageLoadedHandle = await InAppBrowser.addListener('browserPageLoaded', async () => {
     const displayUrl = profile.value!.baseUrl.replace(/^https?:\/\//, '')
     await InAppBrowser.executeScript({ code: buildToolbarScript(connectionStore.state, displayUrl) })
     await InAppBrowser.executeScript({ code: buildMobileComposerFixScript() })
+    const modelVisibilityCode = buildModelVisibilityScript(profile.value!.modelVisibility ?? [])
+
+    if (modelVisibilityCode) {
+      await InAppBrowser.executeScript({ code: modelVisibilityCode })
+    }
+
     await InAppBrowser.executeScript({
       code: `(function(){
         var patterns=['Error: ServerSync','Error: Settings context','settings context must be used'];
@@ -648,8 +489,6 @@ async function openInAppBrowser(): Promise<void> {
       disableOverscroll: true,
       activeNativeNavigationForWebview: true,
       isPresentAfterPageLoad: true,
-      preShowScriptInjectionTime: 'documentStart',
-      preShowScript: buildNotificationBridgeScript(),
       ...(auth && !isIOS ? {
         credentials: {
           username: profile.value!.username,
@@ -666,7 +505,7 @@ async function openInAppBrowser(): Promise<void> {
 
 async function openInNewTabFallback(): Promise<void> {
   const pw = await serverStore.getPassword(profile.value!.id)
-  const url = buildIframeUrl(
+  const url = buildWebviewUrl(
     profile.value!.baseUrl,
     profile.value!.authEnabled ? profile.value!.username : undefined,
     profile.value!.authEnabled && pw ? pw : undefined,

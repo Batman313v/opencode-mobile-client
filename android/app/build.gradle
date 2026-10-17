@@ -133,6 +133,11 @@ android {
         }
     }
     buildTypes {
+        debug {
+            // Installs alongside the production app on devices that already have it.
+            applicationIdSuffix ".dev"
+            versionNameSuffix "-dev"
+        }
         release {
             if (releaseSigningReady && releaseStoreFileExists) {
                 signingConfig signingConfigs.release

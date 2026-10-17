@@ -57,18 +57,13 @@ opencode serve --hostname 0.0.0.0 --port 4096</pre>
           </div>
 
           <div>
-            <h3 class="text-sm font-semibold mb-1">{{ t('help.blank') }}</h3>
-            <p class="text-sm leading-relaxed" v-html="t('help.blankText')" />
-          </div>
-
-          <div>
             <h3 class="text-sm font-semibold mb-1">{{ t('help.http') }}</h3>
             <p class="text-sm leading-relaxed" v-html="t('help.httpText')" />
           </div>
 
           <div>
-            <h3 class="text-sm font-semibold mb-1">{{ t('help.cors') }}</h3>
-            <p class="text-sm leading-relaxed">{{ t('help.corsText') }}</p>
+            <h3 class="text-sm font-semibold mb-1">{{ t('help.notifications') }}</h3>
+            <p class="text-sm leading-relaxed" v-html="t('help.notificationsText')" />
           </div>
 
         </div>

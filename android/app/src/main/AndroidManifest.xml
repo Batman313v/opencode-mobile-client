@@ -29,9 +29,30 @@
             android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- Subscribes to the ntfy topic natively in the background (see ListeningService.java).
+             specialUse: persistent remote-event monitoring has no dedicated FGS type and, unlike
+             dataSync, is not subject to the 6-hour background lifetime limit. -->
+        <service
+            android:name=".ListeningService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Continuously subscribes to the user-configured ntfy topic (SSE over HTTP) that OpenCode servers publish session and permission events to, and posts local notifications — including Approve/Deny actions for permission requests. No other foreground service type covers persistent remote-event monitoring." />
+        </service>
+
+        <!-- Handles Approve / Always allow / Deny taps from permission notifications (see NotificationActionReceiver.java). -->
+        <receiver
+            android:name=".NotificationActionReceiver"
+            android:exported="false" />
     </application>
 
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 </manifest>
